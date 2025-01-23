@@ -78,8 +78,11 @@ async function uploadFileToDify(base64Data, config, userId) {
     }
 
     const result = await response.json();
-    log("info", "文件上传成功", { fileId: result.id });
-    return result.id; // 返回文件 ID
+    //log("info", "文件上传成功", { fileId: result.id });
+    //return result.id; // 返回文件 ID
+    log("info", "文件上传成功", { fileId: result.id, fileType: fileExtension.toUpperCase() });
+    // 返回包含文件 ID 和类型的对象
+    return { fileId: result.id, fileType: fileExtension.toUpperCase() };
   } catch (error) {
     console.error("上传文件出错:", error);
     throw error;
@@ -111,27 +114,28 @@ async function handleRequest(req, res, config, requestId, startTime) {
         if (content.type === "text") {
           queryString += content.text + "\n";
         } else if (content.type === "image_url") {
-          // 检查是否提供了 'url' 字段
           if (content.image_url && content.image_url.url) {
-            // 如果有 URL，直接添加到 files，使用 transfer_method 为 'remote_url'
-            files.push({
-              type: "image",
-              transfer_method: "remote_url",
-              url: content.image_url.url,
-            });
-          } else {
-            // 如果没有 URL，可能是 base64 数据，需要上传
-            // 上传图片并获取文件 ID
-            const fileId = await uploadFileToDify(
-              content.image_url.url, // 假设此处提供的是 base64 数据
-              config,
-              userId
-            );
-            files.push({
-              type: "image",
-              transfer_method: "local_file",
-              upload_file_id: fileId,
-            });
+            const imageUrl = content.image_url.url;
+            if (imageUrl.startsWith("data:")) {
+              // 如果是 base64 数据，上传文件并获取文件 ID
+              const { fileId } = await uploadFileToDify(
+                imageUrl, // base64 数据
+                config,
+                userId
+              );
+              files.push({
+                type: "image",                // 统一设置为 image
+                transfer_method: "local_file",
+                upload_file_id: fileId,
+              });
+            } else {
+              // 如果是普通 URL，直接使用远程 URL 方式
+              files.push({
+                type: "image",                // 统一设置为 image
+                transfer_method: "remote_url",
+                url: imageUrl,
+              });
+            }
           }
         }
       }
@@ -420,10 +424,11 @@ async function handleRequest(req, res, config, requestId, startTime) {
             const outputs = chunkObj.data.outputs;
             if (config.OUTPUT_VARIABLE) {
               result = outputs[config.OUTPUT_VARIABLE];
-            } else {
-              result = outputs;
+            } else if (outputs && typeof outputs === 'object' && outputs.answer) {
+              // 如果 outputs 是对象且包含 answer 字段，则提取 answer
+              result = outputs.answer;
             }
-            result = String(result);
+            //result = String(result);
             usageData = {
               prompt_tokens: chunkObj.metadata?.usage?.prompt_tokens || 100,
               completion_tokens:
