@@ -41,7 +41,7 @@ npm install
 
 使用 PM2 启动（推荐）：
 ```bash
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.cjs
 ```
 
 或者使用普通方式启动：
